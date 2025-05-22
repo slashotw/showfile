@@ -1,0 +1,135 @@
+#!/bin/bash
+
+# 顯示幫助信息的函數
+show_help() {
+    echo "Usage: showfile [OPTIONS]"
+    echo "Display contents of files based on various criteria."
+    echo
+    echo "Options:"
+    echo "  -d, --directory DIR    Specify the directory to search (default: current directory)"
+    echo "  -e, --extension EXT    Filter files by extension"
+    echo "  -n, --name NAME        Filter files by name (substring match)"
+    echo "  -s, --size SIZE        Filter files larger than SIZE (in KB)"
+    echo "  -f, --files FILES      Specify comma-separated list of file names to search for"
+    echo "  -c, --copy             Copy output to clipboard"
+    echo "  -h, --help             Display this help message"
+    echo
+    echo "Examples:"
+    echo "  showfile -d /path/to/dir -e .txt -s 100"
+    echo "  showfile -n config -f file1.txt,file2.conf -c"
+}
+
+# 預設值
+DIRECTORY="."
+EXTENSION=""
+NAME=""
+MIN_SIZE=0
+FILES=""
+COPY_TO_CLIPBOARD=false
+
+# 解析參數
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -d|--directory) DIRECTORY="$2"; shift ;;
+        -e|--extension) EXTENSION="$2"; shift ;;
+        -n|--name) NAME="$2"; shift ;;
+        -s|--size) MIN_SIZE="$2"; shift ;;
+        -f|--files) FILES="$2"; shift ;;
+        -c|--copy) COPY_TO_CLIPBOARD=true ;;
+        -h|--help) show_help; exit 0 ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+# 檢查文件是否為文本文件
+is_text_file() {
+    file --mime-type "$1" | grep -q "text/"
+}
+
+# 處理檔案內容的函數
+process_file() {
+    if is_text_file "$1"; then
+        echo "===== $1 ====="
+        cat "$1" | tr -cd "[:print:]\n\t"
+        echo -e "\n\n"
+    else
+        echo "===== $1 ====="
+        echo "[Binary file or non-text file, content not displayed]"
+        echo -e "\n\n"
+    fi
+}
+
+# 構建 find 命令的條件
+build_conditions() {
+    local conditions=()
+    if [ -n "$NAME" ]; then
+        conditions+=(-name "*$NAME*")
+    fi
+    if [ -n "$MIN_SIZE" ]; then
+        conditions+=(-size +"$MIN_SIZE"k)
+    fi
+    echo "${conditions[@]}"
+}
+
+# 創建一個臨時檔案來儲存所有輸出
+temp_file=$(mktemp)
+
+# 清空臨時文件
+> "$temp_file"
+
+# 構建基本條件
+conditions=$(build_conditions)
+
+# 處理文件
+process_files() {
+    while IFS= read -r -d '' file; do
+        process_file "$file" | tee -a "$temp_file"
+    done
+}
+
+# 執行搜尋
+if [ -n "$FILES" ]; then
+    IFS=',' read -ra FILE_ARRAY <<< "$FILES"
+    for file in "${FILE_ARRAY[@]}"; do
+        find "$DIRECTORY" -type f -name "$file" $conditions -print0 | process_files
+    done
+fi
+
+if [ -n "$EXTENSION" ]; then
+    find "$DIRECTORY" -type f -name "*$EXTENSION" $conditions -print0 | process_files
+fi
+
+if [ -z "$FILES" ] && [ -z "$EXTENSION" ]; then
+    if [ -n "$conditions" ]; then
+        find "$DIRECTORY" -type f $conditions -print0 | process_files
+    else
+        find "$DIRECTORY" -type f -print0 | process_files
+    fi
+fi
+
+# 如果指定了 -c 參數，將內容複製到剪貼板
+if [ "$COPY_TO_CLIPBOARD" = true ]; then
+    if command -v pbcopy &> /dev/null; then
+        # macOS
+        cat "$temp_file" | pbcopy
+        echo "Content copied to clipboard (macOS)."
+    elif command -v xclip &> /dev/null; then
+        # Linux with xclip
+        cat "$temp_file" | xclip -selection clipboard
+        echo "Content copied to clipboard (Linux with xclip)."
+    elif command -v xsel &> /dev/null; then
+        # Linux with xsel
+        cat "$temp_file" | xsel --clipboard --input
+        echo "Content copied to clipboard (Linux with xsel)."
+    elif command -v clip.exe &> /dev/null; then
+        # Windows (WSL)
+        cat "$temp_file" | clip.exe
+        echo "Content copied to clipboard (Windows)."
+    else
+        echo "Unable to copy to clipboard. No supported clipboard utility found."
+    fi
+fi
+
+# 刪除臨時檔案
+rm "$temp_file"
