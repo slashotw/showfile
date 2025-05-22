@@ -1,4 +1,4 @@
-# Showfile
+# Showfile 📝📋
 
 `showfile` is a Bash script that allows you to display the contents of files based on various criteria such as directory, file extension, name, size, or a specific list of files. It also supports copying the output to the system clipboard for easy use.
 
