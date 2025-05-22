@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 顯示幫助信息的函數
+# Function to display help information
 show_help() {
     echo "Usage: showfile [OPTIONS]"
     echo "Display contents of files based on various criteria."
@@ -19,7 +19,7 @@ show_help() {
     echo "  showfile -n config -f file1.txt,file2.conf -c"
 }
 
-# 預設值
+# Default values
 DIRECTORY="."
 EXTENSION=""
 NAME=""
@@ -27,7 +27,7 @@ MIN_SIZE=0
 FILES=""
 COPY_TO_CLIPBOARD=false
 
-# 解析參數
+# Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -d|--directory) DIRECTORY="$2"; shift ;;
@@ -42,12 +42,12 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# 檢查文件是否為文本文件
+# Check if a file is a text file
 is_text_file() {
     file --mime-type "$1" | grep -q "text/"
 }
 
-# 處理檔案內容的函數
+# Function to process file contents
 process_file() {
     if is_text_file "$1"; then
         echo "===== $1 ====="
@@ -60,7 +60,7 @@ process_file() {
     fi
 }
 
-# 構建 find 命令的條件
+# Build conditions for the find command
 build_conditions() {
     local conditions=()
     if [ -n "$NAME" ]; then
@@ -72,23 +72,23 @@ build_conditions() {
     echo "${conditions[@]}"
 }
 
-# 創建一個臨時檔案來儲存所有輸出
+# Create a temporary file to store all output
 temp_file=$(mktemp)
 
-# 清空臨時文件
+# Clear the temporary file
 > "$temp_file"
 
-# 構建基本條件
+# Build basic conditions
 conditions=$(build_conditions)
 
-# 處理文件
+# Process files
 process_files() {
     while IFS= read -r -d '' file; do
         process_file "$file" | tee -a "$temp_file"
     done
 }
 
-# 執行搜尋
+# Execute search
 if [ -n "$FILES" ]; then
     IFS=',' read -ra FILE_ARRAY <<< "$FILES"
     for file in "${FILE_ARRAY[@]}"; do
@@ -108,7 +108,7 @@ if [ -z "$FILES" ] && [ -z "$EXTENSION" ]; then
     fi
 fi
 
-# 如果指定了 -c 參數，將內容複製到剪貼板
+# If -c parameter is specified, copy content to clipboard
 if [ "$COPY_TO_CLIPBOARD" = true ]; then
     if command -v pbcopy &> /dev/null; then
         # macOS
@@ -131,5 +131,5 @@ if [ "$COPY_TO_CLIPBOARD" = true ]; then
     fi
 fi
 
-# 刪除臨時檔案
+# Delete the temporary file
 rm "$temp_file"
